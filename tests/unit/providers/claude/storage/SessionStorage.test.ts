@@ -136,6 +136,31 @@ describe('SessionStorage', () => {
       );
     });
 
+    it('loads old (.claudian) metadata and migrates it to the plugin folder', async () => {
+      const metadata = {
+        id: 'session-old',
+        title: 'Old Session',
+        createdAt: 1700000000,
+        updatedAt: 1700001000,
+      };
+
+      mockAdapter.exists.mockImplementation(async (path: string) => (
+        path === `${OLD_SESSIONS_PATH}/session-old.meta.json`
+      ));
+      mockAdapter.read.mockResolvedValue(JSON.stringify(metadata));
+
+      const result = await storage.loadMetadata('session-old');
+
+      expect(result).toEqual(metadata);
+      expect(mockAdapter.write).toHaveBeenCalledWith(
+        `${EXPECTED_SESSIONS_PATH}/session-old.meta.json`,
+        expect.any(String),
+      );
+      expect(mockAdapter.delete).toHaveBeenCalledWith(
+        `${OLD_SESSIONS_PATH}/session-old.meta.json`,
+      );
+    });
+
     it('loads and parses metadata from JSON file', async () => {
       const metadata = {
         id: 'session-abc',
