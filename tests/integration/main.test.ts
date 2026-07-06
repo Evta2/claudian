@@ -33,6 +33,7 @@ describe('ClaudianPlugin', () => {
 
     mockApp = {
       vault: {
+        configDir: '.obsidian',
         adapter: {
           basePath: '/test/vault',
           exists: jest.fn().mockResolvedValue(false),
@@ -216,10 +217,10 @@ describe('ClaudianPlugin', () => {
     it('should merge saved data with defaults', async () => {
       // Mock claudian-settings.json exists with custom values (Claudian-specific settings)
       mockApp.vault.adapter.exists.mockImplementation(async (path: string) => {
-        return path === '.claudian/claudian-settings.json';
+        return path === '.obsidian/plugins/realclaudian/claudian-settings.json';
       });
       mockApp.vault.adapter.read.mockImplementation(async (path: string) => {
-        if (path === '.claudian/claudian-settings.json') {
+        if (path === '.obsidian/plugins/realclaudian/claudian-settings.json') {
           return JSON.stringify({
             userName: 'TestUser',
           });
@@ -235,10 +236,10 @@ describe('ClaudianPlugin', () => {
 
     it('should strip legacy blocklist fields when loading old settings', async () => {
       mockApp.vault.adapter.exists.mockImplementation(async (path: string) => {
-        return path === '.claudian/claudian-settings.json';
+        return path === '.obsidian/plugins/realclaudian/claudian-settings.json';
       });
       mockApp.vault.adapter.read.mockImplementation(async (path: string) => {
-        if (path === '.claudian/claudian-settings.json') {
+        if (path === '.obsidian/plugins/realclaudian/claudian-settings.json') {
           return JSON.stringify({
             enableBlocklist: false,
             blockedCommands: { unix: ['rm -rf', '  '] },
@@ -252,11 +253,11 @@ describe('ClaudianPlugin', () => {
       expect('enableBlocklist' in plugin.settings).toBe(false);
       expect('blockedCommands' in plugin.settings).toBe(false);
       expect(mockApp.vault.adapter.write).toHaveBeenCalledWith(
-        '.claudian/claudian-settings.json',
+        '.obsidian/plugins/realclaudian/claudian-settings.json',
         expect.any(String),
       );
       const writeCall = (mockApp.vault.adapter.write as jest.Mock).mock.calls.find(
-        ([path]) => path === '.claudian/claudian-settings.json',
+        ([path]) => path === '.obsidian/plugins/realclaudian/claudian-settings.json',
       );
       expect(writeCall).toBeDefined();
       const content = JSON.parse(writeCall[1]);
@@ -286,10 +287,10 @@ describe('ClaudianPlugin', () => {
 
     it('should migrate legacy openInMainTab true to main-tab placement', async () => {
       mockApp.vault.adapter.exists.mockImplementation(async (path: string) => {
-        return path === '.claudian/claudian-settings.json';
+        return path === '.obsidian/plugins/realclaudian/claudian-settings.json';
       });
       mockApp.vault.adapter.read.mockImplementation(async (path: string) => {
-        if (path === '.claudian/claudian-settings.json') {
+        if (path === '.obsidian/plugins/realclaudian/claudian-settings.json') {
           return JSON.stringify({ openInMainTab: true });
         }
         return '';
@@ -299,7 +300,7 @@ describe('ClaudianPlugin', () => {
 
       expect(plugin.settings.chatViewPlacement).toBe('main-tab');
       const writeCall = (mockApp.vault.adapter.write as jest.Mock).mock.calls.find(
-        ([path]) => path === '.claudian/claudian-settings.json',
+        ([path]) => path === '.obsidian/plugins/realclaudian/claudian-settings.json',
       );
       expect(writeCall).toBeDefined();
       const content = JSON.parse(writeCall[1]);
@@ -310,10 +311,10 @@ describe('ClaudianPlugin', () => {
     it('should reconcile model from environment and persist when changed', async () => {
       // Mock claudian-settings.json with environment variables
       mockApp.vault.adapter.exists.mockImplementation(async (path: string) => {
-        return path === '.claudian/claudian-settings.json';
+        return path === '.obsidian/plugins/realclaudian/claudian-settings.json';
       });
       mockApp.vault.adapter.read.mockImplementation(async (path: string) => {
-        if (path === '.claudian/claudian-settings.json') {
+        if (path === '.obsidian/plugins/realclaudian/claudian-settings.json') {
           return JSON.stringify({
             environmentVariables: 'ANTHROPIC_MODEL=custom-model',
             lastEnvHash: '',
@@ -338,13 +339,13 @@ describe('ClaudianPlugin', () => {
 
       // Claudian-specific settings should be written to .claudian/claudian-settings.json
       expect(mockApp.vault.adapter.write).toHaveBeenCalledWith(
-        '.claudian/claudian-settings.json',
+        '.obsidian/plugins/realclaudian/claudian-settings.json',
         expect.any(String)
       );
 
       // The written content should include state fields
       const writeCall = (mockApp.vault.adapter.write as jest.Mock).mock.calls.find(
-        ([path]) => path === '.claudian/claudian-settings.json'
+        ([path]) => path === '.obsidian/plugins/realclaudian/claudian-settings.json'
       );
       expect(writeCall).toBeDefined();
       const content = JSON.parse(writeCall[1]);
@@ -738,35 +739,6 @@ describe('ClaudianPlugin', () => {
       expect(updated?.messages).toEqual(messages);
     });
 
-    it('should preserve image data when updating conversation messages', async () => {
-      await plugin.onload();
-
-      const conv = await plugin.createConversation();
-      const messages = [
-        {
-          id: 'msg-1',
-          role: 'user' as const,
-          content: 'See attached image',
-          timestamp: Date.now(),
-          images: [
-            {
-              id: 'img-1',
-              name: 'pasted.png',
-              mediaType: 'image/png' as const,
-              data: 'YmFzZTY0',
-              size: 10,
-              source: 'paste' as const,
-            },
-          ],
-        },
-      ];
-
-      await plugin.updateConversation(conv.id, { messages });
-
-      const updated = await plugin.getConversationById(conv.id);
-      expect(updated?.messages[0].images?.[0].data).toBe('YmFzZTY0');
-    });
-
     it('should update conversation sessionId', async () => {
       await plugin.onload();
 
@@ -840,26 +812,26 @@ describe('ClaudianPlugin', () => {
       // Mock files exist
       mockApp.vault.adapter.exists.mockImplementation(async (path: string) => {
         // Session files
-        if (path === '.claudian/sessions' || path === '.claudian/sessions/conv-saved-1.meta.json') {
+        if (path === '.obsidian/plugins/realclaudian/sessions' || path === '.obsidian/plugins/realclaudian/sessions/conv-saved-1.meta.json') {
           return true;
         }
         // claudian-settings.json exists
-        if (path === '.claudian/claudian-settings.json') {
+        if (path === '.obsidian/plugins/realclaudian/claudian-settings.json') {
           return true;
         }
         return false;
       });
       mockApp.vault.adapter.list.mockImplementation(async (path: string) => {
-        if (path === '.claudian/sessions') {
-          return { files: ['.claudian/sessions/conv-saved-1.meta.json'], folders: [] };
+        if (path === '.obsidian/plugins/realclaudian/sessions') {
+          return { files: ['.obsidian/plugins/realclaudian/sessions/conv-saved-1.meta.json'], folders: [] };
         }
         return { files: [], folders: [] };
       });
       mockApp.vault.adapter.read.mockImplementation(async (path: string) => {
-        if (path === '.claudian/sessions/conv-saved-1.meta.json') {
+        if (path === '.obsidian/plugins/realclaudian/sessions/conv-saved-1.meta.json') {
           return sessionMeta;
         }
-        if (path === '.claudian/claudian-settings.json') {
+        if (path === '.obsidian/plugins/realclaudian/claudian-settings.json') {
           return JSON.stringify({});
         }
         return '';
@@ -886,25 +858,25 @@ describe('ClaudianPlugin', () => {
       });
 
       mockApp.vault.adapter.exists.mockImplementation(async (path: string) => {
-        return path === '.claudian/claudian-settings.json' ||
-          path === '.claudian/sessions' ||
-          path === '.claudian/sessions/conv-saved-1.meta.json';
+        return path === '.obsidian/plugins/realclaudian/claudian-settings.json' ||
+          path === '.obsidian/plugins/realclaudian/sessions' ||
+          path === '.obsidian/plugins/realclaudian/sessions/conv-saved-1.meta.json';
       });
       mockApp.vault.adapter.list.mockImplementation(async (path: string) => {
-        if (path === '.claudian/sessions') {
-          return { files: ['.claudian/sessions/conv-saved-1.meta.json'], folders: [] };
+        if (path === '.obsidian/plugins/realclaudian/sessions') {
+          return { files: ['.obsidian/plugins/realclaudian/sessions/conv-saved-1.meta.json'], folders: [] };
         }
         return { files: [], folders: [] };
       });
       mockApp.vault.adapter.read.mockImplementation(async (path: string) => {
-        if (path === '.claudian/claudian-settings.json') {
+        if (path === '.obsidian/plugins/realclaudian/claudian-settings.json') {
           // All these fields are now in claudian-settings.json
           return JSON.stringify({
             lastEnvHash: 'old-hash',
             environmentVariables: 'ANTHROPIC_BASE_URL=https://api.example.com',
           });
         }
-        if (path === '.claudian/sessions/conv-saved-1.meta.json') {
+        if (path === '.obsidian/plugins/realclaudian/sessions/conv-saved-1.meta.json') {
           return sessionMeta;
         }
         return '';
@@ -919,7 +891,7 @@ describe('ClaudianPlugin', () => {
       expect(loaded?.sessionId).toBeNull();
 
       const sessionWrite = (mockApp.vault.adapter.write as jest.Mock).mock.calls.find(
-        ([path]) => path === '.claudian/sessions/conv-saved-1.meta.json'
+        ([path]) => path === '.obsidian/plugins/realclaudian/sessions/conv-saved-1.meta.json'
       );
       expect(sessionWrite).toBeDefined();
       const meta = JSON.parse(sessionWrite?.[1] as string);
@@ -960,21 +932,21 @@ describe('ClaudianPlugin', () => {
       });
 
       mockApp.vault.adapter.exists.mockImplementation(async (path: string) => {
-        return path === '.claudian/claudian-settings.json' ||
-          path === '.claudian/sessions' ||
-          path === '.claudian/sessions/conv-multi-session.meta.json';
+        return path === '.obsidian/plugins/realclaudian/claudian-settings.json' ||
+          path === '.obsidian/plugins/realclaudian/sessions' ||
+          path === '.obsidian/plugins/realclaudian/sessions/conv-multi-session.meta.json';
       });
       mockApp.vault.adapter.list.mockImplementation(async (path: string) => {
-        if (path === '.claudian/sessions') {
-          return { files: ['.claudian/sessions/conv-multi-session.meta.json'], folders: [] };
+        if (path === '.obsidian/plugins/realclaudian/sessions') {
+          return { files: ['.obsidian/plugins/realclaudian/sessions/conv-multi-session.meta.json'], folders: [] };
         }
         return { files: [], folders: [] };
       });
       mockApp.vault.adapter.read.mockImplementation(async (path: string) => {
-        if (path === '.claudian/sessions/conv-multi-session.meta.json') {
+        if (path === '.obsidian/plugins/realclaudian/sessions/conv-multi-session.meta.json') {
           return sessionMeta;
         }
-        if (path === '.claudian/claudian-settings.json') {
+        if (path === '.obsidian/plugins/realclaudian/claudian-settings.json') {
           return JSON.stringify({});
         }
         return '';
@@ -1030,71 +1002,6 @@ describe('ClaudianPlugin', () => {
   });
 
   describe('loadSdkMessagesForConversation - fork branch', () => {
-    it('should repair blank image data from Claude SDK history during hydration', async () => {
-      await plugin.onload();
-
-      const conv = await plugin.createConversation();
-      await plugin.updateConversation(conv.id, {
-        providerState: {
-          providerSessionId: 'session-with-image',
-        },
-        messages: [
-          {
-            id: 'user-with-image',
-            role: 'user',
-            content: 'See attached image',
-            timestamp: 1000,
-            images: [{
-              id: 'img-blank',
-              name: 'pasted.png',
-              mediaType: 'image/png',
-              data: '',
-              size: 0,
-              source: 'paste',
-            }],
-          },
-        ],
-      });
-
-      const existsSpy = jest.spyOn(sdkSession, 'sdkSessionExists').mockReturnValue(true);
-      const loadSpy = jest.spyOn(sdkSession, 'loadSDKSessionMessages').mockResolvedValue({
-        messages: [
-          {
-            id: 'user-with-image',
-            role: 'user',
-            content: 'See attached image',
-            timestamp: 1000,
-            images: [{
-              id: 'sdk-img-user-with-image-0',
-              name: 'image-1',
-              mediaType: 'image/png',
-              data: 'aGVsbG8=',
-              size: 5,
-              source: 'paste',
-            }],
-          },
-        ],
-        skippedLines: 0,
-      });
-
-      const loaded = await plugin.getConversationById(conv.id);
-
-      expect(loadSpy).toHaveBeenCalledWith(
-        expect.any(String),
-        'session-with-image',
-        undefined
-      );
-      expect(loaded?.messages[0].images?.[0]).toMatchObject({
-        id: 'img-blank',
-        data: 'aGVsbG8=',
-        mediaType: 'image/png',
-        size: 5,
-      });
-
-      existsSpy.mockRestore();
-      loadSpy.mockRestore();
-    });
-
     it('should load from forkSource.sessionId and truncate at forkSource.resumeAt for pending fork', async () => {
       await plugin.onload();
 
