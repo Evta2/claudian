@@ -28,7 +28,7 @@ export class CodexRpcTransport {
     rl.on('line', (line) => this.handleLine(line));
 
     this.proc.onExit(() => {
-      this.rejectAllPending(new Error(this.buildProcessExitMessage()));
+      this.rejectAllPending(new Error('App-server process exited'));
     });
   }
 
@@ -167,10 +167,5 @@ export class CodexRpcTransport {
       pending.reject(error);
     }
     this.pending.clear();
-  }
-
-  private buildProcessExitMessage(): string {
-    const stderr = this.proc.getStderrSnapshot();
-    return stderr ? `App-server process exited\n\n${stderr}` : 'App-server process exited';
   }
 }

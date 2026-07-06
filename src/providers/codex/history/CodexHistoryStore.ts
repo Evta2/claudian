@@ -2,16 +2,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-import type { ChatMessage, ContentBlock, ImageAttachment, ToolCallInfo } from '../../../core/types';
+import type { ChatMessage, ContentBlock, ToolCallInfo } from '../../../core/types';
 import { extractUserDisplayContent } from '../../../utils/context';
-import {
-  buildImageAttachmentFromBase64,
-  parseImageDataUri,
-} from '../../../utils/imageAttachment';
-import {
-  joinCodexUserTextParts,
-  stripCodexImagePlaceholderText,
-} from '../codexUserText';
 import {
   isCodexToolOutputError,
   normalizeCodexMcpToolInput,
@@ -48,7 +40,6 @@ interface CodexItem {
 }
 
 interface PersistedMessagePart {
-  image_url?: string | { url?: string };
   type?: string;
   text?: string;
 }
@@ -147,7 +138,6 @@ interface CodexTurnState {
   lastEventAt: number;
   userTimestamp?: number;
   userChunks: string[];
-  userImages: ImageAttachment[];
   assistantBubbles: CodexAssistantBubble[];
   activeBubbleIndex: number | null;
 }
@@ -186,7 +176,6 @@ function newTurnState(id: string, timestamp: number): CodexTurnState {
     startedAt: timestamp,
     lastEventAt: timestamp,
     userChunks: [],
-    userImages: [],
     assistantBubbles: [],
     activeBubbleIndex: null,
   };
@@ -277,22 +266,6 @@ function appendUserChunk(turn: CodexTurnState, value: string, timestamp: number)
   appendUniqueChunk(turn.userChunks, value);
 
   if (turn.userChunks.length > chunkCountBefore && !turn.userTimestamp && timestamp > 0) {
-    turn.userTimestamp = timestamp;
-  }
-}
-
-function appendUserImages(
-  turn: CodexTurnState,
-  content: PersistedMessagePart[] | undefined,
-  timestamp: number,
-): void {
-  const images = extractMessageImages(content, `codex-img-${turn.id}`, turn.userImages.length);
-  if (images.length === 0) {
-    return;
-  }
-
-  turn.userImages.push(...images);
-  if (!turn.userTimestamp && timestamp > 0) {
     turn.userTimestamp = timestamp;
   }
 }
@@ -460,7 +433,7 @@ function stripLeadingCodexControlBlocks(text: string): string {
 }
 
 function extractCodexUserVisibleText(text: string): string | null {
-  const trimmed = stripCodexImagePlaceholderText(text).trimStart();
+  const trimmed = text.trimStart();
   if (!trimmed) {
     return null;
   }
@@ -469,7 +442,7 @@ function extractCodexUserVisibleText(text: string): string | null {
     return null;
   }
 
-  const visible = stripCodexImagePlaceholderText(stripLeadingCodexControlBlocks(trimmed)).trim();
+  const visible = stripLeadingCodexControlBlocks(trimmed).trim();
   return visible ? visible : null;
 }
 
@@ -481,73 +454,6 @@ function extractMessageText(content: PersistedMessagePart[] | undefined): string
   return content
     .map(part => (typeof part?.text === 'string' ? part.text : ''))
     .join('');
-}
-
-function extractUserMessageText(content: PersistedMessagePart[] | undefined): string {
-  if (!Array.isArray(content)) {
-    return '';
-  }
-
-  return joinCodexUserTextParts(
-    content.map(part => (typeof part?.text === 'string' ? part.text : '')),
-  );
-}
-
-function extractMessageImages(
-  content: PersistedMessagePart[] | undefined,
-  idPrefix: string,
-  startIndex = 0,
-): ImageAttachment[] {
-  if (!Array.isArray(content)) {
-    return [];
-  }
-
-  const images: ImageAttachment[] = [];
-  for (const part of content) {
-    if (part?.type !== 'input_image') {
-      continue;
-    }
-
-    const imageUrl = typeof part.image_url === 'string'
-      ? part.image_url
-      : typeof part.image_url?.url === 'string'
-        ? part.image_url.url
-        : null;
-    const parsed = parseImageDataUri(imageUrl);
-    if (!parsed) {
-      continue;
-    }
-
-    const image = buildImageAttachmentFromBase64({
-      data: parsed.data,
-      id: `${idPrefix}-${startIndex + images.length}`,
-      mediaType: parsed.mediaType,
-      name: `image-${startIndex + images.length + 1}.${parsed.mediaType.split('/')[1]}`,
-    });
-    if (image) {
-      images.push(image);
-    }
-  }
-
-  return images;
-}
-
-function hasMessageImages(content: PersistedMessagePart[] | undefined): boolean {
-  if (!Array.isArray(content)) {
-    return false;
-  }
-
-  return content.some((part) => {
-    if (part?.type !== 'input_image') {
-      return false;
-    }
-    const imageUrl = typeof part.image_url === 'string'
-      ? part.image_url
-      : typeof part.image_url?.url === 'string'
-        ? part.image_url.url
-        : null;
-    return parseImageDataUri(imageUrl) !== null;
-  });
 }
 
 function joinTextParts(parts: Array<{ text?: string } | string>): string {
@@ -992,12 +898,11 @@ function processPersistedPayload(
   switch (payload.type) {
     case 'message': {
       const messagePayload = payload as PersistedMessagePayload;
+      const text = extractMessageText(messagePayload.content);
 
       if (messagePayload.role === 'user') {
-        const text = extractUserMessageText(messagePayload.content);
         const visibleText = extractCodexUserVisibleText(text);
-        const hasImages = hasMessageImages(messagePayload.content);
-        if (visibleText === null && !hasImages) break;
+        if (visibleText === null) break;
 
         // Close any active bubble in the current turn before starting user content
         if (ctx.currentTurnId) {
@@ -1009,12 +914,8 @@ function processPersistedPayload(
         ctx.currentTurnId = null;
         const turn = ensureTurn(ctx.turns, ctx.turnOrder, nextTurnId(ctx), null, timestamp);
         ctx.currentTurnId = turn.id;
-        if (visibleText !== null) {
-          appendUserChunk(turn, visibleText, timestamp);
-        }
-        appendUserImages(turn, messagePayload.content, timestamp);
+        appendUserChunk(turn, visibleText, timestamp);
       } else if (messagePayload.role === 'assistant') {
-        const text = extractMessageText(messagePayload.content);
         const turn = ensureTurn(ctx.turns, ctx.turnOrder, nextTurnId(ctx), ctx.currentTurnId, timestamp);
         const bubble = ensureAssistantBubble(turn, timestamp);
         if (text) {
@@ -1182,15 +1083,13 @@ function flushBubbleTurnMessages(
   const messages: ChatMessage[] = [];
 
   const visibleUserText = extractCodexUserVisibleText(turn.userChunks.join('\n'));
-  const userImages = turn.userImages.length > 0 ? turn.userImages : undefined;
-  if (visibleUserText || userImages) {
-    const displayContent = visibleUserText ? extractUserDisplayContent(visibleUserText) : undefined;
+  if (visibleUserText) {
+    const displayContent = extractUserDisplayContent(visibleUserText);
     messages.push({
       id: `codex-msg-${msgIndex}`,
       role: 'user',
-      content: visibleUserText ?? '',
+      content: visibleUserText,
       ...(displayContent !== undefined ? { displayContent } : {}),
-      ...(userImages ? { images: userImages } : {}),
       ...(turn.serverTurnId ? { userMessageId: turn.serverTurnId } : {}),
       timestamp: turn.userTimestamp || turn.startedAt || Date.now(),
     });

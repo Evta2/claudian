@@ -1,6 +1,5 @@
 import type { ChatTurnMetadata } from '../../../core/runtime/types';
 import type { StreamChunk, UsageInfo } from '../../../core/types';
-import { joinCodexUserTextParts } from '../codexUserText';
 import {
   isCodexToolOutputError,
   normalizeCodexToolInput,
@@ -737,10 +736,10 @@ export class CodexNotificationRouter {
   }
 
   private extractUserMessageText(content: UserInput[]): string {
-    return joinCodexUserTextParts(
-      content.map((part) => (part.type === 'text' ? part.text : '')),
-      '\n\n',
-    );
+    return content
+      .map((part) => (part.type === 'text' ? part.text : ''))
+      .filter((text) => text.length > 0)
+      .join('\n\n');
   }
 
   // -- turn/plan/updated (update_plan) ----------------------------------------
